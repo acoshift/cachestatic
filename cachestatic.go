@@ -27,9 +27,7 @@ func New() func(http.Handler) http.Handler {
 				l.RUnlock()
 				wh := w.Header()
 				for k, vs := range c.header {
-					for _, v := range vs {
-						wh.Set(k, v)
-					}
+					wh[k] = vs
 				}
 				w.Write(c.data)
 				return
