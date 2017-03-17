@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -41,7 +40,6 @@ func TestCachestatic(t *testing.T) {
 		if resp.Header.Get("Custom-Header") != "0" {
 			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get("Content-Type"))
 		}
-		log.Println(resp.Header)
 		defer resp.Body.Close()
 		r, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
