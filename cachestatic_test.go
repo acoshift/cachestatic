@@ -27,7 +27,7 @@ func createTestHandler() http.Handler {
 }
 
 func TestCachestatic(t *testing.T) {
-	ts := httptest.NewServer(New()(createTestHandler()))
+	ts := httptest.NewServer(New(DefaultConfig)(createTestHandler()))
 	defer ts.Close()
 
 	verify := func(resp *http.Response, err error) {
@@ -57,7 +57,7 @@ func TestCachestatic(t *testing.T) {
 }
 
 func BenchmarkCacheStatic(b *testing.B) {
-	ts := httptest.NewServer(New()(createTestHandler()))
+	ts := httptest.NewServer(New(DefaultConfig)(createTestHandler()))
 	defer ts.Close()
 	for i := 0; i < b.N; i++ {
 		resp, err := http.Get(ts.URL)

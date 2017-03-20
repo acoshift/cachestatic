@@ -12,8 +12,24 @@ type item struct {
 	header http.Header
 }
 
+// Config type
+type Config struct {
+	// Skip returns true to skip cache
+	Skip func(*http.Request) bool
+}
+
+// DefaultConfig is the default config
+var DefaultConfig = Config{
+	Skip: func(r *http.Request) bool { return false },
+}
+
 // New creates new cachestatic middleware
-func New() func(http.Handler) http.Handler {
+func New(config Config) func(http.Handler) http.Handler {
+	c := DefaultConfig
+	if config.Skip != nil {
+		c.Skip = config.Skip
+	}
+
 	var (
 		l     = &sync.RWMutex{}
 		cache = make(map[string]*item)
@@ -21,6 +37,11 @@ func New() func(http.Handler) http.Handler {
 
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if c.Skip(r) {
+				h.ServeHTTP(w, r)
+				return
+			}
+
 			p := path.Clean(r.URL.Path)
 			l.RLock()
 			if c := cache[p]; c != nil {
