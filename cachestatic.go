@@ -43,7 +43,7 @@ func New(config Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			p := path.Clean(r.URL.Path)
+			p := r.Method + ":" + path.Clean(r.URL.Path)
 			l.RLock()
 			if c := cache[p]; c != nil {
 				l.RUnlock()
