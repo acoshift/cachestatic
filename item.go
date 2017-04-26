@@ -3,6 +3,8 @@ package cachestatic
 import (
 	"net/http"
 	"time"
+
+	"github.com/acoshift/header"
 )
 
 type item struct {
@@ -17,7 +19,7 @@ func createItem(w *responseWriter) *item {
 		header: w.h,
 	}
 	if w.h != nil {
-		if v := w.h.Get("Last-Modified"); len(v) > 0 {
+		if v := w.h.Get(header.LastModified); len(v) > 0 {
 			it.lastModified, _ = time.Parse(time.RFC1123, v)
 		}
 	}

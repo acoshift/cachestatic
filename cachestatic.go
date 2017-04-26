@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/acoshift/header"
 	"github.com/acoshift/middleware"
 )
 
@@ -63,12 +64,12 @@ func New(config Config) func(http.Handler) http.Handler {
 
 				// check Last-Modified
 				if !c.lastModified.IsZero() {
-					if ts := r.Header.Get("If-Modified-Since"); len(ts) > 0 {
+					if ts := r.Header.Get(header.IfModifiedSince); len(ts) > 0 {
 						t, _ := time.Parse(time.RFC1123, ts)
 						if c.lastModified.Equal(t) {
-							wh.Del("Content-Type")
-							wh.Del("Content-Length")
-							wh.Del("Accept-Ranges")
+							wh.Del(header.ContentType)
+							wh.Del(header.ContentLength)
+							wh.Del(header.AcceptRanges)
 							w.WriteHeader(http.StatusNotModified)
 							return
 						}
