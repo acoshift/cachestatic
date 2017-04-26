@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"path"
 	"sync"
+
+	"github.com/acoshift/middleware"
 )
 
 type item struct {
@@ -15,20 +17,19 @@ type item struct {
 
 // Config type
 type Config struct {
-	// Skip returns true to skip cache
-	Skip func(*http.Request) bool
+	Skipper middleware.Skipper
 }
 
 // DefaultConfig is the default config
 var DefaultConfig = Config{
-	Skip: func(r *http.Request) bool { return false },
+	Skipper: middleware.DefaultSkipper,
 }
 
 // New creates new cachestatic middleware
 func New(config Config) func(http.Handler) http.Handler {
 	c := DefaultConfig
-	if config.Skip != nil {
-		c.Skip = config.Skip
+	if config.Skipper != nil {
+		c.Skipper = config.Skipper
 	}
 
 	var (
@@ -38,7 +39,7 @@ func New(config Config) func(http.Handler) http.Handler {
 
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if c.Skip(r) {
+			if c.Skipper(r) {
 				h.ServeHTTP(w, r)
 				return
 			}
