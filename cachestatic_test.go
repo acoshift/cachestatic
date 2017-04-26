@@ -2,23 +2,32 @@ package cachestatic
 
 import (
 	"bytes"
+	"compress/gzip"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/acoshift/gzip"
+	mgzip "github.com/acoshift/gzip"
 	"github.com/acoshift/middleware"
 )
 
 func createTestHandler() http.Handler {
 	i := 0
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Custom-Header", "0")
+			w.WriteHeader(200)
+			return
+		}
 		if i == 0 {
 			i++
-			w.Header().Set("Content-Type", "text/plain; utf-8")
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Header().Set("Custom-Header", "0")
 			w.WriteHeader(200)
 			w.Write([]byte("OK"))
@@ -38,7 +47,7 @@ func TestCachestatic(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected error to be nil; got %v", err)
 		}
-		if resp.Header.Get("Content-Type") != "text/plain; utf-8" {
+		if resp.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
 			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get("Content-Type"))
 		}
 		if resp.Header.Get("Custom-Header") != "0" {
@@ -61,9 +70,11 @@ func TestCachestatic(t *testing.T) {
 }
 
 func TestWithGzip(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
 	h := middleware.Chain(
 		New(DefaultConfig),
-		gzip.New(gzip.Config{Level: gzip.BestSpeed}),
+		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
 	)(createTestHandler())
 
 	ts := httptest.NewServer(h)
@@ -76,14 +87,23 @@ func TestWithGzip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected error to be nil; got %v", err)
 		}
-		if resp.Header.Get("Content-Type") != "text/plain; utf-8" {
+		if resp.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
 			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get("Content-Type"))
 		}
 		if resp.Header.Get("Custom-Header") != "0" {
-			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get("Content-Type"))
+			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get("Custom-Header"))
 		}
 		defer resp.Body.Close()
-		r, err := ioutil.ReadAll(resp.Body)
+		if resp.Request.Method == http.MethodHead {
+			return
+		}
+		var body io.Reader
+		if resp.Header.Get("Content-Encoding") == "gzip" {
+			body, _ = gzip.NewReader(resp.Body)
+		} else {
+			body = resp.Body
+		}
+		r, err := ioutil.ReadAll(body)
 		if err != nil {
 			t.Fatalf("read response body error; %v", err)
 		}
@@ -95,7 +115,14 @@ func TestWithGzip(t *testing.T) {
 	l := 1000
 	wg.Add(l)
 	for i := 0; i < l; i++ {
-		go verify(http.Get(ts.URL))
+		req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
+		if rand.Int()%2 == 0 {
+			req.Header.Set("Accept-Encoding", "gzip")
+		}
+		if rand.Int()%2 == 0 {
+			req.Method = http.MethodHead
+		}
+		go verify(http.DefaultClient.Do(req))
 	}
 	wg.Wait()
 }
