@@ -18,11 +18,20 @@ type item struct {
 // Config type
 type Config struct {
 	Skipper middleware.Skipper
+
+	// Indexer is the function to map request to index
+	Indexer func(*http.Request) string
 }
 
 // DefaultConfig is the default config
 var DefaultConfig = Config{
 	Skipper: middleware.DefaultSkipper,
+	Indexer: DefaultIndexer,
+}
+
+// DefaultIndexer is the default indexer function
+func DefaultIndexer(r *http.Request) string {
+	return r.Method + ":" + path.Clean(r.URL.Path)
 }
 
 // New creates new cachestatic middleware
@@ -30,6 +39,9 @@ func New(config Config) func(http.Handler) http.Handler {
 	c := DefaultConfig
 	if config.Skipper != nil {
 		c.Skipper = config.Skipper
+	}
+	if config.Indexer != nil {
+		c.Indexer = config.Indexer
 	}
 
 	var (
@@ -44,7 +56,7 @@ func New(config Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			p := r.Method + ":" + path.Clean(r.URL.Path)
+			p := c.Indexer(r)
 			l.RLock()
 			if c := cache[p]; c != nil {
 				l.RUnlock()

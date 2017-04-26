@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -33,9 +35,25 @@ func createTestHandler() http.Handler {
 			w.Write([]byte("OK"))
 			return
 		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Custom-Header", "1")
 		w.WriteHeader(200)
 		w.Write([]byte("Not first response"))
+	})
+}
+
+func createStaticHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Custom-Header", "0")
+			w.WriteHeader(200)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Custom-Header", "0")
+		w.WriteHeader(200)
+		w.Write([]byte("OK"))
 	})
 }
 
@@ -72,13 +90,11 @@ func TestCachestatic(t *testing.T) {
 func TestWithGzip(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
-	h := middleware.Chain(
-		New(DefaultConfig),
-		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
-	)(createTestHandler())
-
-	ts := httptest.NewServer(h)
-	defer ts.Close()
+	client := &http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	}
 
 	wg := &sync.WaitGroup{}
 
@@ -97,6 +113,9 @@ func TestWithGzip(t *testing.T) {
 		if resp.Request.Method == http.MethodHead {
 			return
 		}
+		if resp.Header.Get("Content-Encoding") == "gzip" && resp.Request.Header.Get("Accept-Encoding") != "gzip" {
+			t.Fatalf("request non gzip; got gzip response")
+		}
 		var body io.Reader
 		if resp.Header.Get("Content-Encoding") == "gzip" {
 			body, _ = gzip.NewReader(resp.Body)
@@ -112,19 +131,59 @@ func TestWithGzip(t *testing.T) {
 		}
 	}
 
-	l := 1000
-	wg.Add(l)
-	for i := 0; i < l; i++ {
-		req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
-		if rand.Int()%2 == 0 {
-			req.Header.Set("Accept-Encoding", "gzip")
+	var h http.Handler
+
+	l := 100
+	run := func() {
+		ts := httptest.NewServer(h)
+		defer ts.Close()
+		wg.Add(l)
+		for i := 0; i < l; i++ {
+			req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
+			if rand.Int()%2 == 0 {
+				req.Header.Set("Accept-Encoding", "gzip")
+			}
+			if rand.Int()%2 == 0 {
+				req.Method = http.MethodHead
+			}
+			go verify(client.Do(req))
 		}
-		if rand.Int()%2 == 0 {
-			req.Method = http.MethodHead
-		}
-		go verify(http.DefaultClient.Do(req))
+		wg.Wait()
 	}
-	wg.Wait()
+
+	// default config
+	h = middleware.Chain(
+		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
+		New(DefaultConfig),
+	)(createTestHandler())
+	run()
+
+	// with skip gzip
+	h = middleware.Chain(
+		New(Config{
+			Skipper: func(r *http.Request) bool {
+				return !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+			},
+		}),
+		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
+	)(createStaticHandler())
+	run()
+
+	// with index gzip
+	h = middleware.Chain(
+		New(Config{
+			Indexer: func(r *http.Request) string {
+				p := r.Method
+				if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+					p += ":gzip"
+				}
+				p += ":" + path.Clean(r.URL.Path)
+				return p
+			},
+		}),
+		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
+	)(createStaticHandler())
+	run()
 }
 
 func BenchmarkCacheStatic(b *testing.B) {
