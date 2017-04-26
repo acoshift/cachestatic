@@ -74,12 +74,16 @@ func New(config Config) func(http.Handler) http.Handler {
 				cache:          &bytes.Buffer{},
 			}
 			h.ServeHTTP(cw, r)
-			l.Lock()
-			cache[p] = &item{
-				header: cw.h,
-				data:   cw.cache.Bytes(),
+
+			// cache only status ok
+			if cw.code == http.StatusOK {
+				l.Lock()
+				cache[p] = &item{
+					header: cw.h,
+					data:   cw.cache.Bytes(),
+				}
+				l.Unlock()
 			}
-			l.Unlock()
 		})
 	}
 }
