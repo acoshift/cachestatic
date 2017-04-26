@@ -26,6 +26,15 @@ func (w *responseWriter) Header() http.Header {
 	return w.h
 }
 
+func contains(arr []string, s string) bool {
+	for _, v := range arr {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *responseWriter) WriteHeader(code int) {
 	w.code = code
 
@@ -33,7 +42,11 @@ func (w *responseWriter) WriteHeader(code int) {
 	if w.h != nil {
 		h := w.ResponseWriter.Header()
 		for k, vv := range w.h {
-			h[k] = append(h[k], vv...)
+			for _, v := range vv {
+				if !contains(h[k], v) {
+					h.Add(k, v)
+				}
+			}
 		}
 	}
 
