@@ -6,14 +6,10 @@ import (
 	"net/http"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/acoshift/middleware"
 )
-
-type item struct {
-	data   []byte
-	header http.Header
-}
 
 // Config type
 type Config struct {
@@ -64,6 +60,21 @@ func New(config Config) func(http.Handler) http.Handler {
 				for k, vs := range c.header {
 					wh[k] = vs
 				}
+
+				// check Last-Modified
+				if !c.lastModified.IsZero() {
+					if ts := r.Header.Get("If-Modified-Since"); len(ts) > 0 {
+						t, _ := time.Parse(time.RFC1123, ts)
+						if c.lastModified.Equal(t) {
+							wh.Del("Content-Type")
+							wh.Del("Content-Length")
+							wh.Del("Accept-Ranges")
+							w.WriteHeader(http.StatusNotModified)
+							return
+						}
+					}
+				}
+
 				io.Copy(w, bytes.NewReader(c.data))
 				return
 			}
@@ -77,10 +88,7 @@ func New(config Config) func(http.Handler) http.Handler {
 			// cache only status ok
 			if cw.code == http.StatusOK {
 				l.Lock()
-				cache[p] = &item{
-					header: cw.h,
-					data:   cw.cache.Bytes(),
-				}
+				cache[p] = createItem(cw)
 				l.Unlock()
 			}
 		})
