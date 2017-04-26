@@ -3,6 +3,7 @@ package cachestatic
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -210,4 +211,15 @@ func BenchmarkNoCacheStatic(b *testing.B) {
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 	}
+}
+
+func Example() {
+	i := 0
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "OK %d", i)
+		i++
+	})
+
+	http.Handle("/", New(DefaultConfig)(h))
+	http.ListenAndServe(":8080", nil)
 }
