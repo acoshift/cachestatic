@@ -9,12 +9,16 @@ import (
 
 type responseWriter struct {
 	http.ResponseWriter
-	h     http.Header
-	cache *bytes.Buffer
-	code  int
+	h           http.Header
+	cache       *bytes.Buffer
+	code        int
+	wroteHeader bool
 }
 
 func (w *responseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
 	w.cache.Write(b)
 	return w.ResponseWriter.Write(b)
 }
@@ -36,6 +40,7 @@ func contains(arr []string, s string) bool {
 }
 
 func (w *responseWriter) WriteHeader(code int) {
+	w.wroteHeader = true
 	w.code = code
 
 	// copy our header to real header
