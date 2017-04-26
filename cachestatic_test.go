@@ -9,13 +9,13 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"path"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	mgzip "github.com/acoshift/gzip"
+	"github.com/acoshift/header"
 	"github.com/acoshift/middleware"
 )
 
@@ -23,20 +23,20 @@ func createTestHandler() http.Handler {
 	i := 0
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set(header.ContentType, "text/plain; charset=utf-8")
 			w.Header().Set("Custom-Header", "0")
 			w.WriteHeader(200)
 			return
 		}
 		if i == 0 {
 			i++
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set(header.ContentType, "text/plain; charset=utf-8")
 			w.Header().Set("Custom-Header", "0")
 			w.WriteHeader(200)
 			w.Write([]byte("OK"))
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set(header.ContentType, "text/plain; charset=utf-8")
 		w.Header().Set("Custom-Header", "1")
 		w.WriteHeader(200)
 		w.Write([]byte("Not first response"))
@@ -46,12 +46,12 @@ func createTestHandler() http.Handler {
 func createStaticHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set(header.ContentType, "text/plain; charset=utf-8")
 			w.Header().Set("Custom-Header", "0")
 			w.WriteHeader(200)
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set(header.ContentType, "text/plain; charset=utf-8")
 		w.Header().Set("Custom-Header", "0")
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
@@ -66,11 +66,11 @@ func TestCachestatic(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected error to be nil; got %v", err)
 		}
-		if resp.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
-			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get("Content-Type"))
+		if resp.Header.Get(header.ContentType) != "text/plain; charset=utf-8" {
+			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get(header.ContentType))
 		}
 		if resp.Header.Get("Custom-Header") != "0" {
-			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get("Content-Type"))
+			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get(header.ContentType))
 		}
 		defer resp.Body.Close()
 		r, err := ioutil.ReadAll(resp.Body)
@@ -104,8 +104,8 @@ func TestWithGzip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected error to be nil; got %v", err)
 		}
-		if resp.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
-			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get("Content-Type"))
+		if resp.Header.Get(header.ContentType) != "text/plain; charset=utf-8" {
+			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get(header.ContentType))
 		}
 		if resp.Header.Get("Custom-Header") != "0" {
 			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get("Custom-Header"))
@@ -114,11 +114,11 @@ func TestWithGzip(t *testing.T) {
 		if resp.Request.Method == http.MethodHead {
 			return
 		}
-		if resp.Header.Get("Content-Encoding") == "gzip" && resp.Request.Header.Get("Accept-Encoding") != "gzip" {
+		if resp.Header.Get(header.ContentEncoding) == header.EncodingGzip && resp.Request.Header.Get(header.AcceptEncoding) != header.EncodingGzip {
 			t.Fatalf("request non gzip; got gzip response")
 		}
 		var body io.Reader
-		if resp.Header.Get("Content-Encoding") == "gzip" {
+		if resp.Header.Get(header.ContentEncoding) == header.EncodingGzip {
 			body, _ = gzip.NewReader(resp.Body)
 		} else {
 			body = resp.Body
@@ -142,7 +142,7 @@ func TestWithGzip(t *testing.T) {
 		for i := 0; i < l; i++ {
 			req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
 			if rand.Int()%2 == 0 {
-				req.Header.Set("Accept-Encoding", "gzip")
+				req.Header.Set(header.AcceptEncoding, header.EncodingGzip)
 			}
 			if rand.Int()%2 == 0 {
 				req.Method = http.MethodHead
@@ -163,7 +163,7 @@ func TestWithGzip(t *testing.T) {
 	h = middleware.Chain(
 		New(Config{
 			Skipper: func(r *http.Request) bool {
-				return !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+				return !strings.Contains(r.Header.Get(header.AcceptEncoding), header.EncodingGzip)
 			},
 		}),
 		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
@@ -173,14 +173,7 @@ func TestWithGzip(t *testing.T) {
 	// with index gzip
 	h = middleware.Chain(
 		New(Config{
-			Indexer: func(r *http.Request) string {
-				p := r.Method
-				if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-					p += ":gzip"
-				}
-				p += ":" + path.Clean(r.URL.Path)
-				return p
-			},
+			Indexer: EncodingIndexer(header.EncodingGzip),
 		}),
 		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
 	)(createStaticHandler())

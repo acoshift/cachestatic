@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"path"
 	"sync"
 	"time"
 
@@ -15,20 +14,13 @@ import (
 // Config type
 type Config struct {
 	Skipper middleware.Skipper
-
-	// Indexer is the function to map request to index
-	Indexer func(*http.Request) string
+	Indexer Indexer
 }
 
 // DefaultConfig is the default config
 var DefaultConfig = Config{
 	Skipper: middleware.DefaultSkipper,
 	Indexer: DefaultIndexer,
-}
-
-// DefaultIndexer is the default indexer function
-func DefaultIndexer(r *http.Request) string {
-	return r.Method + ":" + path.Clean(r.URL.Path)
 }
 
 // New creates new cachestatic middleware
