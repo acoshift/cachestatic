@@ -64,8 +64,7 @@ func New(config Config) func(http.Handler) http.Handler {
 				for k, vs := range c.header {
 					wh[k] = vs
 				}
-				buf := bytes.NewReader(c.data)
-				io.Copy(w, buf)
+				io.Copy(w, bytes.NewReader(c.data))
 				return
 			}
 			l.RUnlock()
