@@ -6,7 +6,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+
+	"github.com/acoshift/gzip"
+	"github.com/acoshift/middleware"
 )
 
 func createTestHandler() http.Handler {
@@ -54,6 +58,46 @@ func TestCachestatic(t *testing.T) {
 	verify(http.Get(ts.URL))
 	verify(http.Get(ts.URL))
 	verify(http.Get(ts.URL))
+}
+
+func TestWithGzip(t *testing.T) {
+	h := middleware.Chain(
+		New(DefaultConfig),
+		gzip.New(gzip.Config{Level: gzip.BestSpeed}),
+	)(createTestHandler())
+
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	wg := &sync.WaitGroup{}
+
+	verify := func(resp *http.Response, err error) {
+		defer wg.Done()
+		if err != nil {
+			t.Fatalf("expected error to be nil; got %v", err)
+		}
+		if resp.Header.Get("Content-Type") != "text/plain; utf-8" {
+			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get("Content-Type"))
+		}
+		if resp.Header.Get("Custom-Header") != "0" {
+			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get("Content-Type"))
+		}
+		defer resp.Body.Close()
+		r, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read response body error; %v", err)
+		}
+		if bytes.Compare(r, []byte("OK")) != 0 {
+			t.Fatalf("invalid response body; got %v", string(r))
+		}
+	}
+
+	l := 1000
+	wg.Add(l)
+	for i := 0; i < l; i++ {
+		go verify(http.Get(ts.URL))
+	}
+	wg.Wait()
 }
 
 func BenchmarkCacheStatic(b *testing.B) {

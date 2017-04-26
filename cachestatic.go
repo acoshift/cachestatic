@@ -61,12 +61,11 @@ func New(config Config) func(http.Handler) http.Handler {
 				cache:          &bytes.Buffer{},
 			}
 			h.ServeHTTP(cw, r)
-			t := &item{
+			l.Lock()
+			cache[p] = &item{
 				header: cw.Header(),
 				data:   cw.cache.Bytes(),
 			}
-			l.Lock()
-			cache[p] = t
 			l.Unlock()
 		})
 	}

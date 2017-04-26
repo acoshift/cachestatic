@@ -9,6 +9,7 @@ import (
 
 type responseWriter struct {
 	http.ResponseWriter
+	h     http.Header
 	cache *bytes.Buffer
 	code  int
 }
@@ -18,8 +19,24 @@ func (w *responseWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+func (w *responseWriter) Header() http.Header {
+	if w.h == nil {
+		w.h = cloneHeader(w.ResponseWriter.Header())
+	}
+	return w.h
+}
+
 func (w *responseWriter) WriteHeader(code int) {
 	w.code = code
+
+	// copy our header to real header
+	if w.h != nil {
+		h := w.ResponseWriter.Header()
+		for k, vv := range w.h {
+			h[k] = append(h[k], vv...)
+		}
+	}
+
 	w.ResponseWriter.WriteHeader(code)
 }
 
@@ -52,4 +69,15 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		return w.Hijack()
 	}
 	return nil, nil, http.ErrNotSupported
+}
+
+// cloneHeader from net/http/header.go
+func cloneHeader(h http.Header) http.Header {
+	h2 := make(http.Header, len(h))
+	for k, vv := range h {
+		vv2 := make([]string, len(vv))
+		copy(vv2, vv)
+		h2[k] = vv2
+	}
+	return h2
 }
