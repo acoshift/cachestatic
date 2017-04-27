@@ -70,7 +70,7 @@ func TestCachestatic(t *testing.T) {
 			t.Fatalf("invalid Content-Type; got %v", resp.Header.Get(header.ContentType))
 		}
 		if resp.Header.Get("Custom-Header") != "0" {
-			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get(header.ContentType))
+			t.Fatalf("invalid Custom-Header; got %v", resp.Header.Get("Custom-Header"))
 		}
 		defer resp.Body.Close()
 		r, err := ioutil.ReadAll(resp.Body)
@@ -178,6 +178,50 @@ func TestWithGzip(t *testing.T) {
 		mgzip.New(mgzip.Config{Level: mgzip.BestSpeed}),
 	)(createStaticHandler())
 	run()
+}
+
+func TestInvalidate(t *testing.T) {
+	ch := make(chan string)
+	ts := httptest.NewServer(New(Config{
+		Invalidator: ch,
+	})(createTestHandler()))
+	defer ts.Close()
+
+	resp, _ := http.Get(ts.URL)
+	resp.Body.Close()
+	if resp.Header.Get("Custom-Header") != "0" {
+		t.Fatalf("Custom-Header must be 0; got %v", resp.Header.Get("Custom-Header"))
+	}
+
+	ch <- "GET:/"
+
+	resp, _ = http.Get(ts.URL)
+	resp.Body.Close()
+	if resp.Header.Get("Custom-Header") != "1" {
+		t.Fatalf("Custom-Header must be 1; got %v", resp.Header.Get("Custom-Header"))
+	}
+}
+
+func TestInvalidateWildcard(t *testing.T) {
+	ch := make(chan string)
+	ts := httptest.NewServer(New(Config{
+		Invalidator: ch,
+	})(createTestHandler()))
+	defer ts.Close()
+
+	resp, _ := http.Get(ts.URL)
+	resp.Body.Close()
+	if resp.Header.Get("Custom-Header") != "0" {
+		t.Fatalf("Custom-Header must be 0; got %v", resp.Header.Get("Custom-Header"))
+	}
+
+	ch <- ""
+
+	resp, _ = http.Get(ts.URL)
+	resp.Body.Close()
+	if resp.Header.Get("Custom-Header") != "1" {
+		t.Fatalf("Custom-Header must be 1; got %v", resp.Header.Get("Custom-Header"))
+	}
 }
 
 func BenchmarkCacheStatic(b *testing.B) {

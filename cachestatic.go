@@ -13,14 +13,16 @@ import (
 
 // Config type
 type Config struct {
-	Skipper middleware.Skipper
-	Indexer Indexer
+	Skipper     middleware.Skipper
+	Indexer     Indexer
+	Invalidator chan string
 }
 
 // DefaultConfig is the default config
 var DefaultConfig = Config{
-	Skipper: middleware.DefaultSkipper,
-	Indexer: DefaultIndexer,
+	Skipper:     middleware.DefaultSkipper,
+	Indexer:     DefaultIndexer,
+	Invalidator: nil,
 }
 
 // New creates new cachestatic middleware
@@ -31,11 +33,31 @@ func New(c Config) func(http.Handler) http.Handler {
 	if c.Indexer == nil {
 		c.Indexer = DefaultConfig.Indexer
 	}
+	if c.Invalidator == nil {
+		c.Invalidator = DefaultConfig.Invalidator
+	}
 
 	var (
 		l     = &sync.RWMutex{}
 		cache = make(map[string]*item)
 	)
+
+	if c.Invalidator != nil {
+		go func() {
+			for {
+				select {
+				case p := <-c.Invalidator:
+					l.Lock()
+					if p == "" {
+						cache = make(map[string]*item)
+					} else {
+						delete(cache, p)
+					}
+					l.Unlock()
+				}
+			}
+		}()
+	}
 
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
