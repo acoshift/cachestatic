@@ -24,13 +24,12 @@ var DefaultConfig = Config{
 }
 
 // New creates new cachestatic middleware
-func New(config Config) func(http.Handler) http.Handler {
-	c := DefaultConfig
-	if config.Skipper != nil {
-		c.Skipper = config.Skipper
+func New(c Config) func(http.Handler) http.Handler {
+	if c.Skipper == nil {
+		c.Skipper = DefaultConfig.Skipper
 	}
-	if config.Indexer != nil {
-		c.Indexer = config.Indexer
+	if c.Indexer == nil {
+		c.Indexer = DefaultConfig.Indexer
 	}
 
 	var (
