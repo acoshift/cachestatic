@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -89,8 +88,6 @@ func TestCachestatic(t *testing.T) {
 }
 
 func TestWithGzip(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-
 	client := &http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
@@ -141,10 +138,10 @@ func TestWithGzip(t *testing.T) {
 		wg.Add(l)
 		for i := 0; i < l; i++ {
 			req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
-			if rand.Int()%2 == 0 {
+			if i%2 == 0 {
 				req.Header.Set(header.AcceptEncoding, header.EncodingGzip)
 			}
-			if rand.Int()%2 == 0 {
+			if i%3 == 0 {
 				req.Method = http.MethodHead
 			}
 			go verify(client.Do(req))
