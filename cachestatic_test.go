@@ -224,6 +224,29 @@ func TestInvalidateWildcard(t *testing.T) {
 	}
 }
 
+func TestLastModified(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(header.LastModified, time.Now().UTC().Format(time.RFC1123))
+		fmt.Fprintf(w, "OK")
+	})
+
+	ts := httptest.NewServer(New(DefaultConfig)(h))
+	defer ts.Close()
+
+	resp, _ := http.Get(ts.URL)
+	resp.Body.Close()
+	lastModified := resp.Header.Get(header.LastModified)
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
+	req.Header.Set(header.IfModifiedSince, lastModified)
+
+	resp, _ = http.DefaultClient.Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotModified {
+		t.Fatalf("expected status code to be 304; got %v", resp.StatusCode)
+	}
+}
+
 func BenchmarkCacheStatic(b *testing.B) {
 	ts := httptest.NewServer(New(DefaultConfig)(createTestHandler()))
 	defer ts.Close()
