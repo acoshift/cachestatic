@@ -223,7 +223,7 @@ func TestInvalidateWildcard(t *testing.T) {
 
 func TestLastModified(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(header.LastModified, time.Now().UTC().Format(time.RFC1123))
+		w.Header().Set(header.LastModified, time.Now().UTC().Format(http.TimeFormat))
 		fmt.Fprintf(w, "OK")
 	})
 
