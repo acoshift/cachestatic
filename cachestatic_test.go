@@ -178,7 +178,7 @@ func TestWithGzip(t *testing.T) {
 }
 
 func TestInvalidate(t *testing.T) {
-	ch := make(chan string)
+	ch := make(chan interface{})
 	ts := httptest.NewServer(New(Config{
 		Invalidator: ch,
 	})(createTestHandler()))
@@ -200,7 +200,7 @@ func TestInvalidate(t *testing.T) {
 }
 
 func TestInvalidateWildcard(t *testing.T) {
-	ch := make(chan string)
+	ch := make(chan interface{})
 	ts := httptest.NewServer(New(Config{
 		Invalidator: ch,
 	})(createTestHandler()))
@@ -212,7 +212,7 @@ func TestInvalidateWildcard(t *testing.T) {
 		t.Fatalf("Custom-Header must be 0; got %v", resp.Header.Get("Custom-Header"))
 	}
 
-	ch <- ""
+	ch <- InvalidateAll
 
 	resp, _ = http.Get(ts.URL)
 	resp.Body.Close()

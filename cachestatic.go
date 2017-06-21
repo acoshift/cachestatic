@@ -14,9 +14,14 @@ import (
 type Config struct {
 	Skipper     middleware.Skipper
 	Indexer     Indexer
-	Invalidator chan string
+	Invalidator chan interface{}
 	SkipHeaders SkipHeaderFunc
 }
+
+type invalidateAll struct{}
+
+// InvalidateAll invalidates all cache items
+var InvalidateAll interface{} = invalidateAll{}
 
 // SkipHeaderFunc is the function to skip header,
 // return true to skip
@@ -59,7 +64,7 @@ func New(c Config) func(http.Handler) http.Handler {
 
 	var (
 		l     = &sync.RWMutex{}
-		cache = make(map[string]*item)
+		cache = make(map[interface{}]*item)
 	)
 
 	if c.Invalidator != nil {
@@ -68,8 +73,8 @@ func New(c Config) func(http.Handler) http.Handler {
 				select {
 				case p := <-c.Invalidator:
 					l.Lock()
-					if p == "" {
-						cache = make(map[string]*item)
+					if _, ok := p.(invalidateAll); ok {
+						cache = make(map[interface{}]*item)
 					} else {
 						delete(cache, p)
 					}
