@@ -15,6 +15,23 @@ type Config struct {
 	Skipper     middleware.Skipper
 	Indexer     Indexer
 	Invalidator chan string
+	SkipHeaders SkipHeaderFunc
+}
+
+// SkipHeaderFunc is the function to skip header,
+// return true to skip
+type SkipHeaderFunc func(string) bool
+
+// SkipHeaders skips all given headers
+func SkipHeaders(headers ...string) SkipHeaderFunc {
+	skipHeader := make(map[string]struct{})
+	for _, h := range headers {
+		skipHeader[h] = struct{}{}
+	}
+	return func(h string) bool {
+		_, ok := skipHeader[h]
+		return ok
+	}
 }
 
 // DefaultConfig is the default config
@@ -22,6 +39,7 @@ var DefaultConfig = Config{
 	Skipper:     middleware.DefaultSkipper,
 	Indexer:     DefaultIndexer,
 	Invalidator: nil,
+	SkipHeaders: SkipHeaders(header.SetCookie),
 }
 
 // New creates new cachestatic middleware
@@ -34,6 +52,9 @@ func New(c Config) func(http.Handler) http.Handler {
 	}
 	if c.Invalidator == nil {
 		c.Invalidator = DefaultConfig.Invalidator
+	}
+	if c.SkipHeaders == nil {
+		c.SkipHeaders = DefaultConfig.SkipHeaders
 	}
 
 	var (
@@ -67,18 +88,20 @@ func New(c Config) func(http.Handler) http.Handler {
 
 			p := c.Indexer(r)
 			l.RLock()
-			if c := cache[p]; c != nil {
+			if ci := cache[p]; ci != nil {
 				l.RUnlock()
 				wh := w.Header()
-				for k, vs := range c.header {
-					wh[k] = vs
+				for k, vs := range ci.header {
+					if !c.SkipHeaders(k) {
+						wh[k] = vs
+					}
 				}
 
 				// check Last-Modified
-				if !c.modTime.IsZero() {
+				if !ci.modTime.IsZero() {
 					if ts := r.Header.Get(header.IfModifiedSince); len(ts) > 0 {
 						t, _ := http.ParseTime(ts)
-						if c.modTime.Equal(t) {
+						if ci.modTime.Equal(t) {
 							wh.Del(header.ContentType)
 							wh.Del(header.ContentLength)
 							wh.Del(header.AcceptRanges)
@@ -88,7 +111,7 @@ func New(c Config) func(http.Handler) http.Handler {
 					}
 				}
 
-				io.Copy(w, bytes.NewReader(c.data))
+				io.Copy(w, bytes.NewReader(ci.data))
 				return
 			}
 			l.RUnlock()
