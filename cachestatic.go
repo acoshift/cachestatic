@@ -114,10 +114,12 @@ func New(c Config) func(http.Handler) http.Handler {
 					}
 				}
 
+				w.Header().Set("X-Cache", "HIT")
 				io.Copy(w, bytes.NewReader(ci.data))
 				return
 			}
 			l.RUnlock()
+			w.Header().Set("X-Cache", "MISS")
 			cw := &responseWriter{
 				ResponseWriter: w,
 				cache:          &bytes.Buffer{},
